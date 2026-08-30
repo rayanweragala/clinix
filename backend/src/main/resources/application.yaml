@@ -1,3 +1,19 @@
 spring:
   application:
     name: app
+
+logging:
+  level:
+    root: ${LOG_LEVEL_ROOT:WARN}
+
+telemedicine:
+  security:
+    issuer: backend-api
+    audience: telemedicine-web
+    jwt-secret-base64: ${JWT_SECRET}
+    access-token-ttl: PT15M
+    refresh-token-ttl: P30D
+    allowed-origins: ${ALLOWED_ORIGINS:http://localhost:5173}
+    cookies:
+      secure: ${COOKIE_SECURE:true}
+      same-site: ${COOKIE_SAME_SITE:Lax}
