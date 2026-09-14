@@ -1,6 +1,10 @@
 package com.telemedicine.app.configuration;
 
 import com.telemedicine.app.common.SameSite;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
 
@@ -11,18 +15,18 @@ import java.util.List;
 @ConfigurationProperties("telemedicine.security")
 public record SecurityProperties(
 
-        String issuer,
-        String audience,
-        String jwtSecretBase64,
-        Duration accessTokenTtl,
-        Duration refreshTokenTtl,
-        List<String> allowedOrigins,
-        CookieSettings cookies
+        @NotBlank String issuer,
+        @NotBlank String audience,
+        @NotBlank String jwtSecretBase64,
+        @NotNull Duration accessTokenTtl,
+        @NotNull Duration refreshTokenTtl,
+        @NotEmpty List<String> allowedOrigins,
+        @NotNull @Valid CookieSettings cookies
 ) {
 
     public record CookieSettings(
             boolean secure,
-            SameSite sameSite
+            @NotNull SameSite sameSite
     ){
     }
 }

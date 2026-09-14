@@ -22,6 +22,7 @@ public class RefreshToken {
     private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "USER_ID", nullable = false)
     private User user;
 
     @Column(name = "TOKEN_HASH", nullable = false)
@@ -30,7 +31,7 @@ public class RefreshToken {
     @Column(name = "FAMILY_ID")
     private UUID familyId;
 
-    @Column(name = "EXPIRES_AT")
+    @Column(name = "EXPIRES_AT", nullable = false)
     private Instant expiresAt;
 
     @Column(name = "REVOKED_AT")

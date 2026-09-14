@@ -8,9 +8,12 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
@@ -22,19 +25,28 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
+import org.springframework.security.web.csrf.CsrfTokenRequestHandler;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
+import java.time.Clock;
 import java.util.Base64;
+import java.util.Collection;
 import java.util.List;
 
 @Configuration
 @EnableMethodSecurity
 @EnableConfigurationProperties(SecurityProperties.class)
 public class SecurityConfiguration {
+
+    @Bean
+    Clock clock() {
+        return Clock.systemUTC();
+    }
 
     @Bean
     PasswordEncoder passwordEncoder(){
@@ -54,7 +66,7 @@ public class SecurityConfiguration {
     @Bean
     JwtDecoder jwtDecoder(SecretKey key, SecurityProperties properties){
        NimbusJwtDecoder decoder =  NimbusJwtDecoder.withSecretKey(key).macAlgorithm(MacAlgorithm.HS256).build();
-        OAuth2TokenValidator<org.springframework.security.oauth2.jwt.Jwt> issuer =
+        OAuth2TokenValidator<Jwt> issuer =
                 JwtValidators.createDefaultWithIssuer(properties.issuer());
         decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
                 issuer, new JwtAudienceValidator(properties.audience())));
@@ -73,13 +85,27 @@ public class SecurityConfiguration {
     }
 
     @Bean
+    CsrfTokenRequestHandler csrfTokenRequestHandler() {
+        return new CsrfTokenRequestAttributeHandler();
+    }
+
+    @Bean
     BearerTokenResolver bearerTokenResolver() {
         return new CookieBearerTokenResolver();
     }
 
     @Bean
     JwtAuthenticationConverter jwtAuthenticationConverter() {
-        return new JwtAuthenticationConverter();
+        JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
+        converter.setJwtGrantedAuthoritiesConverter(SecurityConfiguration::roleAuthorities);
+        return converter;
+    }
+
+    private static Collection<GrantedAuthority> roleAuthorities(Jwt jwt) {
+        String role = jwt.getClaimAsString("role");
+        return role == null || role.isBlank()
+                ? List.of()
+                : List.of(new SimpleGrantedAuthority("ROLE_" + role));
     }
 
     @Bean
@@ -87,7 +113,7 @@ public class SecurityConfiguration {
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowedOrigins(properties.allowedOrigins());
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        config.setAllowedHeaders(List.of("Content-Type", "X-XSRF-TOKEN", "Authorization"));
+        config.setAllowedHeaders(List.of("Content-Type", "X-XSRF-TOKEN"));
         config.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
@@ -100,6 +126,7 @@ public class SecurityConfiguration {
             HttpSecurity http,
             JwtAuthenticationConverter jwtAuthenticationConverter,
             CookieCsrfTokenRepository csrfTokenRepository,
+            CsrfTokenRequestHandler csrfTokenRequestHandler,
             BearerTokenResolver bearerTokenResolver,
             CorsConfigurationSource corsConfigurationSource
     ) throws Exception {
@@ -107,8 +134,9 @@ public class SecurityConfiguration {
                 .sessionManagement(session->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 
-                .csrf(csrf->
-                        csrf.csrfTokenRepository(csrfTokenRepository))
+                .csrf(csrf-> csrf
+                        .csrfTokenRepository(csrfTokenRepository)
+                        .csrfTokenRequestHandler(csrfTokenRequestHandler))
 
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
 
@@ -117,19 +145,14 @@ public class SecurityConfiguration {
                 .logout(AbstractHttpConfigurer::disable)
 
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(
-                                "/api/v1/auth/csrf",
-                                "/api/v1/auth/login",
-                                "/api/v1/auth/refresh",
-                                "/api/v1/auth/logout",
-                                "/api/v1/auth/forgot-password",
-                                "/api/v1/auth/reset-password"
-                        )
+                        .requestMatchers(AuthPaths.PUBLIC.toArray(String[]::new))
+                        .permitAll()
+                        .requestMatchers("/api/v1/public/**", "/error")
                         .permitAll()
                         .requestMatchers("/api/**")
                         .authenticated()
                         .anyRequest()
-                        .permitAll())
+                        .denyAll())
                 .oauth2ResourceServer(resource-> resource
                         .bearerTokenResolver(bearerTokenResolver)
                         .jwt(jwt-> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter)));
