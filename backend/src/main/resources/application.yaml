@@ -1,3 +1,33 @@
 spring:
   application:
     name: app
+  datasource:
+    url: ${DB_URL:jdbc:mysql://localhost:3306/telemedicine}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: ${DDL_AUTO:validate}
+
+server:
+  error:
+    include-message: never
+    include-stacktrace: never
+    include-binding-errors: never
+
+logging:
+  level:
+    root: ${LOG_LEVEL_ROOT:WARN}
+
+telemedicine:
+  security:
+    issuer: backend-api
+    audience: telemedicine-web
+    jwt-secret-base64: ${JWT_SECRET}
+    access-token-ttl: PT15M
+    refresh-token-ttl: P30D
+    allowed-origins: ${ALLOWED_ORIGINS:http://localhost:5173}
+    cookies:
+      secure: ${COOKIE_SECURE:true}
+      same-site: ${COOKIE_SAME_SITE:Lax}
